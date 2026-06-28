@@ -79,6 +79,8 @@ jobs:
 
       - name: Download AI model from HuggingFace
         if: steps.cache-ai.outputs.cache-hit != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p ai-model
           echo "Downloading Privacy Filter model (2.6GB)..."
