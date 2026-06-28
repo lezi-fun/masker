@@ -20,6 +20,7 @@ build_version() {
     echo "构建: $variant"
     echo "========================================"
 
+    # shellcheck disable=SC2086
     swift build -c release $extra_flag
 
     local dest="${PROJECT}.app"
