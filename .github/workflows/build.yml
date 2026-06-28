@@ -82,6 +82,11 @@ jobs:
           .venv/bin/pip install --quiet transformers torch huggingface-hub 2>&1 | tail -1
           .venv/bin/python -c "from huggingface_hub import snapshot_download; print('huggingface_hub OK')"
 
+      - name: Install Pillow (for DMG background)
+        run: |
+          python3 -m pip install --break-system-packages Pillow --quiet 2>&1 | tail -1
+          python3 -c "from PIL import Image; print('Pillow OK')"
+
       - name: Build (full)
         run: swift build -c release
 
