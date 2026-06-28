@@ -62,8 +62,9 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip3 install --break-system-packages transformers torch huggingface-hub --quiet 2>&1 | tail -1
-          python3 -c "from huggingface_hub import snapshot_download; print('huggingface_hub OK')"
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet transformers torch huggingface-hub 2>&1 | tail -1
+          .venv/bin/python -c "from huggingface_hub import snapshot_download; print('huggingface_hub OK')"
 
       - name: Build (full)
         run: swift build -c release
@@ -72,7 +73,7 @@ jobs:
         run: |
           mkdir -p ai-model
           echo "Downloading Privacy Filter model (2.6GB)..."
-          python3 scripts/download_model.py
+          .venv/bin/python scripts/download_model.py
           ls -lh ai-model/
 
       - name: Package artifact
@@ -84,6 +85,8 @@ jobs:
           cp .build/release/Masker artifacts-full/Masker.app/Contents/MacOS/
           # Scripts
           cp extract_text.py privacy_filter.py artifacts-full/Masker.app/Contents/Resources/
+          # Python venv (needed at runtime for AI and file extraction)
+          rsync -a .venv/ artifacts-full/Masker.app/Contents/Resources/.venv/ --exclude='__pycache__'
           # AI model
           cp ai-model/config.json artifacts-full/Masker.app/Contents/Resources/ai-model/
           cp ai-model/model.safetensors artifacts-full/Masker.app/Contents/Resources/ai-model/
