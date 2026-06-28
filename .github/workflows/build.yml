@@ -62,8 +62,7 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip3 install transformers torch huggingface-hub --quiet 2>&1 | tail -1
-          # Verify huggingface_hub is installed
+          pip3 install --break-system-packages transformers torch huggingface-hub --quiet 2>&1 | tail -1
           python3 -c "from huggingface_hub import snapshot_download; print('huggingface_hub OK')"
 
       - name: Build (full)
