@@ -1,0 +1,24 @@
+# Build outputs
+*.app/
+.build/
+.venv/
+ai-model/
+masker-icon/master.png
+masker-icon/Masker.iconset/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# IDE
+.idea/
+.vscode/
+*.xcodeproj/
+xcuserdata/
+
+# Test files
+test_files/
+company-doc-test.txt
