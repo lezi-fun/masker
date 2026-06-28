@@ -136,3 +136,64 @@ jobs:
         run: |
           python3 -m py_compile extract_text.py || true
           python3 -m py_compile privacy_filter.py || true
+
+  # ── Release：构建完成后自动创建 Release ──
+  release:
+    name: Create Release
+    needs: [light-build, full-build, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate tag
+        id: tag
+        run: |
+          DATE=$(date -u +%Y%m%d-%H%M%S)
+          SHA=$(git rev-parse --short HEAD)
+          echo "tag=v2.0-ci-${DATE}-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "release_name=Build ${DATE}" >> "$GITHUB_OUTPUT"
+
+      - name: Download light artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Masker-轻量版
+          path: release/Masker-轻量版.app
+
+      - name: Download full artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Masker-完整版
+          path: release/Masker-完整版.app
+
+      - name: Create release archive (light)
+        run: |
+          cd release
+          zip -r Masker-轻量版.zip Masker-轻量版.app
+          ls -lh Masker-轻量版.zip
+
+      - name: Create release archive (full)
+        run: |
+          cd release
+          zip -r Masker-完整版.zip Masker-完整版.app
+          ls -lh Masker-完整版.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.release_name }}
+          body: |
+            ## Masker 自动构建
+
+            - 轻量版: 仅 regex 检测，零依赖，即开即用
+            - 完整版: 含 AI 模型 (Privacy Filter)，离线运行
+
+            **SHA**: ${{ github.sha }}
+            **构建时间**: ${{ steps.tag.outputs.release_name }}
+          files: |
+            release/Masker-轻量版.zip
+            release/Masker-完整版.zip
+          generate_release_notes: false
+          prerelease: true
