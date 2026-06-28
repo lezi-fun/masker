@@ -55,9 +55,9 @@ jobs:
           name: Masker-轻量版
           path: artifacts/Masker.app
 
-  # ── 完整版：编译（不含 AI 权重，只打包可执行文件） ──
+  # ── 完整版：编译 + 下载 AI 模型打包 ──
   full-build:
-    name: 完整版 (with AI stub)
+    name: 完整版 (with AI)
     runs-on: macos-latest
 
     steps:
@@ -68,16 +68,38 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip3 install transformers torch --quiet 2>&1 | tail -1
+          pip3 install transformers torch huggingface-hub --quiet 2>&1 | tail -1
 
       - name: Build (full)
         run: swift build -c release
 
+      - name: Download AI model from HuggingFace
+        run: |
+          mkdir -p ai-model
+          echo "Downloading Privacy Filter model (2.6GB)..."
+          huggingface-cli download openai/privacy-filter \
+            --local-dir ai-model \
+            --local-dir-use-symlinks False 2>&1
+          echo "Model downloaded:"
+          ls -lh ai-model/
+
       - name: Package artifact
         run: |
-          mkdir -p artifacts-full/Masker.app/Contents/MacOS artifacts-full/Masker.app/Contents/Resources
+          mkdir -p artifacts-full/Masker.app/Contents/MacOS \
+                   artifacts-full/Masker.app/Contents/Resources/ai-model \
+                   artifacts-full/Masker.app/Contents/Resources/.venv
+          # Binary
           cp .build/release/Masker artifacts-full/Masker.app/Contents/MacOS/
+          # Scripts
           cp extract_text.py privacy_filter.py artifacts-full/Masker.app/Contents/Resources/
+          # AI model
+          cp ai-model/config.json artifacts-full/Masker.app/Contents/Resources/ai-model/
+          cp ai-model/model.safetensors artifacts-full/Masker.app/Contents/Resources/ai-model/
+          cp ai-model/tokenizer_config.json artifacts-full/Masker.app/Contents/Resources/ai-model/
+          cp ai-model/tokenizer.json artifacts-full/Masker.app/Contents/Resources/ai-model/
+          # Icon (if exists)
+          cp masker-icon/Masker.icns artifacts-full/Masker.app/Contents/Resources/ 2>/dev/null || true
+          # Info.plist
           cat > artifacts-full/Masker.app/Contents/Info.plist << PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -87,6 +109,7 @@ jobs:
             <key>CFBundleExecutable</key><string>Masker</string>
             <key>CFBundleIdentifier</key><string>com.lezi.masker</string>
             <key>CFBundleName</key><string>Masker</string>
+            <key>CFBundleIconFile</key><string>Masker</string>
             <key>CFBundlePackageType</key><string>APPL</string>
             <key>CFBundleShortVersionString</key><string>2.0</string>
             <key>CFBundleVersion</key><string>2</string>
@@ -95,12 +118,10 @@ jobs:
           </dict>
           </plist>
           PLIST
-          # Note: AI model weights (ai-model/) are NOT bundled in CI.
-          # Users must provide them manually for AI features.
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Masker-完整版-stub
+          name: Masker-完整版
           path: artifacts-full/Masker.app
 
   # ── 代码质量 ──
