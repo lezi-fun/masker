@@ -15,6 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install DMG tools
+        run: pip3 install --break-system-packages pillow --quiet 2>&1 | tail -1 || true
+
       - name: Build (light)
         run: swift build -c release -Xswiftc -DNO_AI
 
@@ -88,8 +91,12 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p ai-model
-          echo "Downloading Privacy Filter model (2.6GB)..."
-          .venv/bin/python scripts/download_model.py
+          echo "Downloading AI model zip (2.6GB)..."
+          curl -L -o /tmp/ai-model.zip \
+            "http://lsyangyi.asuscomm.com:5245/d/ai-model.zip?sign=tnwYagbwV7zTECPsb5-gvjU14c4NIeTamQvdOw4dTgs=:0"
+          echo "Extracting..."
+          unzip -o /tmp/ai-model.zip -d ai-model/
+          rm -f /tmp/ai-model.zip
           ls -lh ai-model/
 
       - name: Package artifact
