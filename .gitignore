@@ -5,6 +5,8 @@
 ai-model/
 masker-icon/master.png
 masker-icon/Masker.iconset/
+masker-cli
+generate_icon.sh
 __pycache__/
 *.pyc
 

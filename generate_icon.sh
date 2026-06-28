@@ -1,8 +1,9 @@
 #!/bin/bash
 # Generate Masker app icon
+# Usage: OPENAI_API_KEY="sk-xxx" ./generate_icon.sh
+# Requires: gpt-image CLI, GPT Image API access
 cd "$(dirname "$0")"
-export OPENAI_BASE_URL="http://127.0.0.1:23010/v1"
-export OPENAI_API_KEY="sk-Hn4niJi0xHDhg4UuJ0VzoSU0vD5jyExHAoFzciTtxVH3Jzl5"
+export OPENAI_BASE_URL="${OPENAI_BASE_URL:-http://127.0.0.1:23010/v1}"
 export NO_PROXY="127.0.0.1,localhost"
 
 gpt-image \
