@@ -63,6 +63,8 @@ jobs:
       - name: Install Python deps
         run: |
           pip3 install transformers torch huggingface-hub --quiet 2>&1 | tail -1
+          # Verify huggingface_hub is installed
+          python3 -c "from huggingface_hub import snapshot_download; print('huggingface_hub OK')"
 
       - name: Build (full)
         run: swift build -c release
@@ -71,9 +73,11 @@ jobs:
         run: |
           mkdir -p ai-model
           echo "Downloading Privacy Filter model (2.6GB)..."
-          huggingface-cli download openai/privacy-filter \
-            --local-dir ai-model \
-            --local-dir-use-symlinks False 2>&1
+          python3 << 'EOF'
+import sys
+from huggingface_hub import snapshot_download
+snapshot_download("openai/privacy-filter", local_dir="ai-model", local_dir_use_symlinks=False)
+EOF
           echo "Model downloaded:"
           ls -lh ai-model/
 
