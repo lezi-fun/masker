@@ -60,6 +60,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Cache the AI model (~2.6GB) so it's not re-downloaded on every push
+      - name: Cache AI model
+        id: cache-ai
+        uses: actions/cache@v4
+        with:
+          path: ai-model/
+          key: openai-privacy-filter-v1
+
       - name: Install Python deps
         run: |
           python3 -m venv .venv
@@ -70,6 +78,7 @@ jobs:
         run: swift build -c release
 
       - name: Download AI model from HuggingFace
+        if: steps.cache-ai.outputs.cache-hit != 'true'
         run: |
           mkdir -p ai-model
           echo "Downloading Privacy Filter model (2.6GB)..."
