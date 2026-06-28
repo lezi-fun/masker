@@ -47,10 +47,18 @@ jobs:
           </plist>
           PLIST
 
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Masker-轻量版" \
+            -srcfolder artifacts/Masker.app \
+            -ov -format UDZO \
+            artifacts/Masker-轻量版.dmg
+          ls -lh artifacts/Masker-轻量版.dmg
+
       - uses: actions/upload-artifact@v4
         with:
           name: Masker-轻量版
-          path: artifacts/Masker.app
+          path: artifacts/Masker-轻量版.dmg
 
   # ── 完整版：编译 + 下载 AI 模型打包 ──
   full-build:
@@ -125,10 +133,18 @@ jobs:
           </plist>
           PLIST
 
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Masker" \
+            -srcfolder artifacts-full/Masker.app \
+            -ov -format UDZO \
+            artifacts-full/Masker.dmg
+          ls -lh artifacts-full/Masker.dmg
+
       - uses: actions/upload-artifact@v4
         with:
           name: Masker-完整版
-          path: artifacts-full/Masker.app
+          path: artifacts-full/Masker.dmg
 
   # ── 代码质量 ──
   lint:
@@ -166,29 +182,20 @@ jobs:
           echo "tag=v2.0-ci-${DATE}-${SHA}" >> "$GITHUB_OUTPUT"
           echo "release_name=Build ${DATE}" >> "$GITHUB_OUTPUT"
 
-      - name: Download light artifact
+      - name: Download light DMG
         uses: actions/download-artifact@v4
         with:
           name: Masker-轻量版
-          path: release/Masker-轻量版.app
+          path: release
 
-      - name: Download full artifact
+      - name: Download full DMG
         uses: actions/download-artifact@v4
         with:
           name: Masker-完整版
-          path: release/Masker-完整版.app
+          path: release
 
-      - name: Create release archive (light)
-        run: |
-          cd release
-          zip -r Masker-轻量版.zip Masker-轻量版.app
-          ls -lh Masker-轻量版.zip
-
-      - name: Create release archive (full)
-        run: |
-          cd release
-          zip -r Masker-完整版.zip Masker-完整版.app
-          ls -lh Masker-完整版.zip
+      - name: List release files
+        run: ls -lh release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -198,13 +205,18 @@ jobs:
           body: |
             ## Masker 自动构建
 
-            - 轻量版: 仅 regex 检测，零依赖，即开即用
-            - 完整版: 含 AI 模型 (Privacy Filter)，离线运行
+            - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测，零依赖，即开即用
+            - 🧠 **完整版** (Masker.dmg): 含 AI 模型 (Privacy Filter)，离线运行
 
-            **SHA**: ${{ github.sha }}
+            **SHA**: `${{ github.sha }}`
             **构建时间**: ${{ steps.tag.outputs.release_name }}
+
+            ### 使用方式
+            1. 下载对应版本的 .dmg
+            2. 双击打开，把 Masker.app 拖到 Applications 文件夹
+            3. 首次打开完整版会加载 AI 模型 (约 3 秒)
           files: |
-            release/Masker-轻量版.zip
-            release/Masker-完整版.zip
+            release/Masker-轻量版.dmg
+            release/Masker.dmg
           generate_release_notes: false
           prerelease: true
