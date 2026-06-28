@@ -47,12 +47,9 @@ jobs:
           </plist>
           PLIST
 
-      - name: Create DMG
+      - name: Create DMG (light)
         run: |
-          hdiutil create -volname "Masker-轻量版" \
-            -srcfolder artifacts/Masker.app \
-            -ov -format UDZO \
-            artifacts/Masker-轻量版.dmg
+          bash scripts/make_dmg.sh artifacts/Masker.app artifacts/Masker-轻量版.dmg "Masker-轻量版"
           ls -lh artifacts/Masker-轻量版.dmg
 
       - uses: actions/upload-artifact@v4
@@ -135,10 +132,7 @@ jobs:
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "Masker" \
-            -srcfolder artifacts-full/Masker.app \
-            -ov -format UDZO \
-            artifacts-full/Masker.dmg
+          bash scripts/make_dmg.sh artifacts-full/Masker.app artifacts-full/Masker.dmg "Masker"
           ls -lh artifacts-full/Masker.dmg
 
       - uses: actions/upload-artifact@v4
