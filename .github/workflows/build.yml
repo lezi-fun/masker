@@ -175,6 +175,8 @@ jobs:
     name: Create Release
     needs: [light-build, full-build, lint]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
