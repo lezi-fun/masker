@@ -148,16 +148,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 获取上一个手动发布的版本号
-      - name: Find base version
-        id: basever
-        run: |
-          LAST_RELEASE=$(gh release list --repo ${{ github.repository }} --limit 20 --json tagName,isLatest --jq '
-            [.[] | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$") | not) |
-            .tagName] | first // "v0.0.1"
-          ' 2>/dev/null || echo "v0.0.1")
-          echo "last_release=$LAST_RELEASE" >> "$GITHUB_OUTPUT"
-
       # 版本号计算
       - name: Generate version
         id: version
@@ -165,67 +155,37 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # 手动触发：使用输入的版本号
+            # 手动触发：使用输入的版本号，标记为 latest
             echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
             echo "release_name=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           else
-            # 自动触发：手动版本号 + alpha + commit hash
-            BASE="${{ steps.basever.outputs.last_release }}"
-            # 去掉 v 前缀
-            BASE="${BASE#v}"
-            echo "tag=v${BASE}-alpha-${SHA}" >> "$GITHUB_OUTPUT"
-            echo "release_name=${BASE}-alpha (${SHA})" >> "$GITHUB_OUTPUT"
+            # 自动触发：使用 rolling alpha 标签
+            echo "tag=alpha" >> "$GITHUB_OUTPUT"
+            echo "release_name=Alpha Build (${SHA})" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # 自动构建时：删除旧的 alpha release（如果有）
+      - name: Delete old alpha release
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete alpha --repo ${{ github.repository }} --yes 2>/dev/null || true
+          git push --delete origin alpha 2>/dev/null || true
 
       # 生成 Release 描述
       - name: Generate release body
         id: body
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # 手动发布：展示本次 commit 信息
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-            CHANGED=$(git diff-tree --no-commit-id -r --name-only HEAD | paste -sd "\n" -)
-            cat > /tmp/release_body.md << EOF
-            ## Masker ${{ github.event.inputs.version }}
-
-            **\$COMMIT_MSG**
-
-            ### 修改文件
-            \`\`\`
-            $CHANGED
-            \`\`\`
-
-            ### 下载
-            - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测，零依赖
-            - 🧠 **完整版** (Masker.dmg): 含 AI 代码，打开后在「使用指南」页下载模型
-
-            ### 使用方式
-            1. 下载 .dmg
-            2. 双击打开，把 Masker.app 拖到 Applications 文件夹
-            3. 如需 AI 检测，打开后在「使用指南」标签页点击「下载 AI 模型」
-            EOF
+            MSG=$(git log -1 --pretty=format:"%s")
+            printf '## Masker %%s\n\n**%%s**\n\n### 下载\n- ⚡ 轻量版 (Masker-轻量版.dmg): 仅 regex 检测\n- 🧠 完整版 (Masker.dmg): 含 AI 代码\n\n### 使用方式\n1. 下载 .dmg\n2. 双击打开，拖到 Applications\n3. 如需 AI 检测，在「使用指南」页下载模型\n' "${{ github.event.inputs.version }}" "$MSG" > /tmp/release_body.md
           else
-            # 自动构建
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-            CHANGED=$(git diff-tree --no-commit-id -r --name-only HEAD | paste -sd "\n" -)
-            cat > /tmp/release_body.md << EOF
-            ## Masker 自动构建 (\${{ steps.version.outputs.release_name }})
-
-            **\$COMMIT_MSG**
-
-            ### 修改文件
-            \`\`\`
-            $CHANGED
-            \`\`\`
-
-            ### 下载
-            - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测，零依赖，即开即用
-
-            ### 完整版
-            如需完整版（含 AI 代码），请手动触发 workflow 并输入版本号。
-            EOF
+            MSG=$(git log -1 --pretty=format:"%s")
+            DATE=$(date -u +%Y%m%d)
+            printf '## Masker 自动构建 (%%s)\n\n**%%s**\n\n### 下载\n- ⚡ 轻量版 (Masker-轻量版.dmg): 仅 regex 检测，即开即用\n\n### 完整版\n如需完整版（含 AI 代码），请手动触发 workflow 并输入版本号。\n' "$DATE" "$MSG" > /tmp/release_body.md
           fi
           echo "body<<BODYEOF" >> "$GITHUB_OUTPUT"
           cat /tmp/release_body.md >> "$GITHUB_OUTPUT"
