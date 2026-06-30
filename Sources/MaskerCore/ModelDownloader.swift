@@ -1,23 +1,23 @@
 #if !NO_AI
 import Foundation
 
-/// Downloads and manages the AI model from OpenList
+/// Downloads and manages the AI model from HuggingFace
 public class ModelDownloader: ObservableObject {
     @Published public var progress: Double = 0.0
     @Published public var statusMessage: String = ""
     @Published public var isDownloading: Bool = false
     @Published public var isDownloaded: Bool = false
 
-    private let downloadURL = "http://lsyangyi.asuscomm.com:5245/d/ai-model.zip?sign=tnwYagbwV7zTECPsb5-gvjU14c4NIeTamQvdOw4dTgs=:0"
+    private let files: [(name: String, url: String)] = [
+        ("config.json", "https://huggingface.co/openai/privacy-filter/resolve/main/config.json"),
+        ("tokenizer_config.json", "https://huggingface.co/openai/privacy-filter/resolve/main/tokenizer_config.json"),
+        ("tokenizer.json", "https://huggingface.co/openai/privacy-filter/resolve/main/tokenizer.json"),
+        ("model.safetensors", "https://huggingface.co/openai/privacy-filter/resolve/main/model.safetensors"),
+    ]
 
     private var modelDir: URL {
         let paths = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         return paths[0].appendingPathComponent("Masker/ai-model", isDirectory: true)
-    }
-
-    private var zipPath: URL {
-        let tmp = FileManager.default.temporaryDirectory
-        return tmp.appendingPathComponent("ai-model.zip")
     }
 
     public init() {
@@ -39,89 +39,104 @@ public class ModelDownloader: ObservableObject {
             self.statusMessage = "准备下载 AI 模型 (2.6GB)..."
         }
 
-        // Create directory
         try? FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
 
-        // Download with progress
-        let result = await downloadWithProgress()
+        var allSuccess = true
+        var completed: Int = 0
 
-        if result {
+        for (name, urlStr) in files {
+            guard let url = URL(string: urlStr) else { continue }
+
             await MainActor.run {
-                self.isDownloaded = true
-                self.statusMessage = "✅ AI 模型下载完成！请重启检测功能"
+                self.statusMessage = "下载 \(name)..."
             }
-        } else {
+
+            let success = await downloadFile(name: name, url: url)
+
             await MainActor.run {
-                self.statusMessage = "❌ 下载失败，请检查网络后重试"
+                completed += 1
+                self.progress = Double(completed) / Double(files.count)
+            }
+
+            if !success {
+                allSuccess = false
+                break
             }
         }
 
         await MainActor.run {
             self.isDownloading = false
+            if allSuccess {
+                self.isDownloaded = true
+                self.statusMessage = "✅ AI 模型下载完成！请重启检测功能"
+            } else {
+                self.statusMessage = "❌ 下载失败，请检查网络后重试"
+            }
         }
     }
 
-    private func downloadWithProgress() async -> Bool {
+    private func downloadFile(name: String, url: URL) async -> Bool {
+        let dest = modelDir.appendingPathComponent(name)
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("masker_\(name)")
+
+        // Resume support: check if partial download exists
+        var existingSize: Int64 = 0
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: tmp.path) {
+            existingSize = (attrs[.size] as? Int64) ?? 0
+        }
+
+        var request = URLRequest(url: url)
+        if existingSize > 0 {
+            request.setValue("bytes=\(existingSize)-", forHTTPHeaderField: "Range")
+        }
+
         return await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
-                let url = URL(string: self.downloadURL)!
+            let session = URLSession(configuration: .default)
+            let task = session.downloadTask(with: request) { tempURL, response, error in
+                defer { session.invalidateAndCancel() }
 
-                let session = URLSession(configuration: .default, delegate: nil, delegateQueue: nil)
-
-                // Use a URLSessionDownloadTask for progress tracking
-                let task = session.downloadTask(with: url) { [self] tempURL, response, error in
-                    defer { session.invalidateAndCancel() }
-
-                    guard let tempURL = tempURL, error == nil else {
-                        continuation.resume(returning: false)
-                        return
-                    }
-
-                    do {
-                        // Move zip to tmp
-                        try? FileManager.default.removeItem(at: self.zipPath)
-                        try FileManager.default.moveItem(at: tempURL, to: self.zipPath)
-
-                        // Extract
-                        DispatchQueue.main.sync {
-                            self.statusMessage = "正在解压..."
-                        }
-
-                        let process = Process()
-                        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-                        process.arguments = ["-o", self.zipPath.path, "-d", self.modelDir.path]
-
-                        let pipe = Pipe()
-                        process.standardOutput = pipe
-                        process.standardError = pipe
-
-                        try process.run()
-                        process.waitUntilExit()
-
-                        try? FileManager.default.removeItem(at: self.zipPath)
-
-                        let success = process.terminationStatus == 0
-                        continuation.resume(returning: success)
-
-                    } catch {
-                        continuation.resume(returning: false)
-                    }
+                if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
+                    continuation.resume(returning: false)
+                    return
                 }
 
-                // Progress observer
-                let observation = task.progress.observe(\.fractionCompleted) { [self] progress, _ in
-                    DispatchQueue.main.sync {
-                        self.progress = progress.fractionCompleted
-                        let pct = Int(progress.fractionCompleted * 100)
-                        self.statusMessage = "下载中... \(pct)%"
-                    }
+                guard let tempURL = tempURL else {
+                    continuation.resume(returning: false)
+                    return
                 }
 
-                task.resume()
+                do {
+                    if existingSize > 0 {
+                        // Append to existing partial file
+                        let fileHandle = try FileHandle(forWritingTo: tmp)
+                        fileHandle.seekToEndOfFile()
+                        let data = try Data(contentsOf: tempURL)
+                        fileHandle.write(data)
+                        try fileHandle.close()
+                    } else {
+                        try? FileManager.default.removeItem(at: tmp)
+                        try FileManager.default.moveItem(at: tempURL, to: tmp)
+                    }
 
-                // Keep observation alive
-                _ = observation
+                    // Move to final destination
+                    try? FileManager.default.removeItem(at: dest)
+                    try FileManager.default.moveItem(at: tmp, to: dest)
+                    continuation.resume(returning: true)
+                } catch {
+                    continuation.resume(returning: false)
+                }
             }
+
+            // Observe progress
+            let obs = task.progress.observe(\.fractionCompleted) { p, _ in
+                DispatchQueue.main.async {
+                    let fileProgress = p.fractionCompleted / Double(self.files.count)
+                    let baseProgress = Double(self.files.count - 1) / Double(self.files.count)
+                    self.progress = baseProgress + fileProgress
+                }
+            }
+            task.resume()
+            _ = obs
         }
     }
 

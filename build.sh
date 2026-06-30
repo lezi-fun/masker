@@ -25,6 +25,7 @@ build_version() {
 
     local dest="${PROJECT}.app"
     [ "$flavor" = "light" ] && dest="Masker-轻量版.app"
+    [ "$flavor" = "offline-ai" ] && dest="Masker-离线AI版.app"
 
     mkdir -p "${dest}/Contents/MacOS" "${dest}/Contents/Resources"
 
@@ -68,13 +69,27 @@ PLIST
 
     # 3. 完整版：打包 AI 模型 + Python 环境 + 脚本
     if [ "$flavor" != "light" ]; then
-        echo "打包 AI 模型..."
+        # 离线 AI 版：从 HuggingFace 下载模型并打包
+        if [ "$flavor" = "offline-ai" ] && [ ! -f ai-model/model.safetensors ]; then
+            echo "下载 AI 模型 (2.6GB)..."
+            mkdir -p ai-model
+            pip3 install --break-system-packages huggingface-hub -q 2>/dev/null
+            python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('openai/privacy-filter', local_dir='ai-model', local_dir_use_symlinks=False)
+" 2>&1
+        fi
+
+        # 如果有本地模型，打包进 .app
+        if [ -f ai-model/model.safetensors ]; then
         local model_dest="${dest}/Contents/Resources/ai-model"
         mkdir -p "$model_dest"
         cp ai-model/config.json "$model_dest/"
         cp ai-model/model.safetensors "$model_dest/"
         cp ai-model/tokenizer_config.json "$model_dest/"
         cp ai-model/tokenizer.json "$model_dest/"
+        fi
+        # ^ closes "if [ -f ai-model/model.safetensors ]"
 
         echo "打包 Python 环境..."
         # 复制 .venv（保留 Python 解释器和依赖库）
@@ -93,12 +108,22 @@ case "${1:-full}" in
     light)
         build_version "轻量版" "light" "-Xswiftc -DNO_AI"
         ;;
+    offline-ai)
+        build_version "离线 AI 版" "offline-ai" ""
+        ;;
     both)
         build_version "完整版 (AI)" "" ""
         build_version "轻量版" "light" "-Xswiftc -DNO_AI"
         echo ""
         echo "✅ 两个版本都已构建:"
         du -sh "Masker.app" "Masker-轻量版.app"
+        ;;
+    offline-both)
+        build_version "离线 AI 版" "offline-ai" ""
+        build_version "轻量版" "light" "-Xswiftc -DNO_AI"
+        echo ""
+        echo "✅ 离线 AI 版 + 轻量版:"
+        du -sh "Masker-离线AI版.app" "Masker-轻量版.app"
         ;;
     *)
         build_version "完整版 (AI)" "" ""
