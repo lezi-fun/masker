@@ -90,37 +90,17 @@ jobs:
       - name: Build (full)
         run: swift build -c release
 
-      - name: Download AI model from HuggingFace
-        if: steps.cache-ai.outputs.cache-hit != 'true'
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          mkdir -p ai-model
-          echo "Downloading AI model zip (2.6GB)..."
-          curl -L -o /tmp/ai-model.zip \
-            "http://lsyangyi.asuscomm.com:5245/d/ai-model.zip?sign=tnwYagbwV7zTECPsb5-gvjU14c4NIeTamQvdOw4dTgs=:0"
-          echo "Extracting..."
-          unzip -o /tmp/ai-model.zip -d ai-model/
-          rm -f /tmp/ai-model.zip
-          ls -lh ai-model/
-
       - name: Package artifact
         run: |
           mkdir -p artifacts-full/Masker.app/Contents/MacOS \
-                   artifacts-full/Masker.app/Contents/Resources/ai-model \
                    artifacts-full/Masker.app/Contents/Resources/.venv
           # Binary
           cp .build/release/Masker artifacts-full/Masker.app/Contents/MacOS/
-          # Scripts
+          # Scripts (needed for runtime AI and file extraction)
           cp extract_text.py privacy_filter.py artifacts-full/Masker.app/Contents/Resources/
-          # Python venv (needed at runtime for AI and file extraction)
+          # Python venv
           rsync -a .venv/ artifacts-full/Masker.app/Contents/Resources/.venv/ --exclude='__pycache__'
-          # AI model
-          cp ai-model/config.json artifacts-full/Masker.app/Contents/Resources/ai-model/
-          cp ai-model/model.safetensors artifacts-full/Masker.app/Contents/Resources/ai-model/
-          cp ai-model/tokenizer_config.json artifacts-full/Masker.app/Contents/Resources/ai-model/
-          cp ai-model/tokenizer.json artifacts-full/Masker.app/Contents/Resources/ai-model/
-          # Icon (if exists)
+          # Icon
           cp masker-icon/Masker.icns artifacts-full/Masker.app/Contents/Resources/ 2>/dev/null || true
           # Info.plist
           cat > artifacts-full/Masker.app/Contents/Info.plist << PLIST
@@ -173,7 +153,7 @@ jobs:
   # ── Release：构建完成后自动创建 Release ──
   release:
     name: Create Release
-    needs: [light-build, full-build, lint]
+    needs: [light-build, lint]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -196,12 +176,6 @@ jobs:
           name: Masker-轻量版
           path: release
 
-      - name: Download full DMG
-        uses: actions/download-artifact@v4
-        with:
-          name: Masker-完整版
-          path: release
-
       - name: List release files
         run: ls -lh release/
 
@@ -214,17 +188,18 @@ jobs:
             ## Masker 自动构建
 
             - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测，零依赖，即开即用
-            - 🧠 **完整版** (Masker.dmg): 含 AI 模型 (Privacy Filter)，离线运行
 
             **SHA**: `${{ github.sha }}`
             **构建时间**: ${{ steps.tag.outputs.release_name }}
 
             ### 使用方式
-            1. 下载对应版本的 .dmg
+            1. 下载 Masker-轻量版.dmg
             2. 双击打开，把 Masker.app 拖到 Applications 文件夹
-            3. 首次打开完整版会加载 AI 模型 (约 3 秒)
+            3. 如需 AI 增强检测，打开应用后在「使用指南」页点击下载模型
+
+            ### 完整版
+            完整版（含 AI 模型）因文件过大无法通过 GitHub Releases 分发。
+            请从 Actions 页面下载 Masker-完整版 artifact，或运行 ./build.sh 本地构建。
           files: |
             release/Masker-轻量版.dmg
-            release/Masker.dmg
-          generate_release_notes: false
           prerelease: true

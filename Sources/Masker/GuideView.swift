@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct GuideView: View {
+    @EnvironmentObject var appState: AppState
     @State private var promptCopied = false
     @State private var exampleCopied = false
 
@@ -166,9 +167,56 @@ struct GuideView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                }
+                    }
 
-                // ── Tips ──
+                    // ── AI 模型下载 ──
+                    #if !NO_AI
+                    VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "brain.head.profile")
+                            .font(.title3)
+                            .foregroundColor(.purple)
+                        Text("AI 模型管理")
+                            .font(.title3).bold()
+                    }
+
+                    if appState.modelDownloader.isDownloaded {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("AI 模型已就绪（\(appState.aiDetector.isAvailable ? "可用" : "加载中")）")
+                        }
+                        .font(.subheadline)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("启用 AI 增强检测需要下载 Privacy Filter 模型（~2.6GB）")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            if appState.modelDownloader.isDownloading {
+                                ProgressView(value: appState.modelDownloader.progress)
+                                    .progressViewStyle(.linear)
+                                    .frame(maxWidth: 300)
+                                Text(appState.modelDownloader.statusMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } else {
+                                Button(action: { Task { await appState.modelDownloader.download() } }) {
+                                    Label("下载 AI 模型 (2.6GB)", systemImage: "icloud.and.arrow.down")
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.purple)
+                            }
+                        }
+                    }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.purple.opacity(0.03))
+                    .cornerRadius(10)
+                    #endif
+
+                    // ── Tips ──
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: "star.fill")

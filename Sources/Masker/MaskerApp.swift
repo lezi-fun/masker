@@ -22,5 +22,6 @@ class AppState: ObservableObject {
     let fileExtractor = FileExtractor()
 #if !NO_AI
     let aiDetector = PrivacyFilterRunner()
+    let modelDownloader = ModelDownloader()
 #endif
 }

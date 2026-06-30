@@ -15,24 +15,28 @@ public class PrivacyFilterRunner: ObservableObject {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
 
-        // ── 判断运行环境：.app bundle 还是开发模式 ──
+        // ── 脚本和 Python 路径 ──
         if let bundlePath = Bundle.main.resourcePath {
-            // 在 .app 内：模型在 Resources/ai-model/
+            scriptPath = "\(bundlePath)/privacy_filter.py"
+            pythonPath = "\(bundlePath)/.venv/bin/python"
+        } else {
+            scriptPath = "\(home)/projects/masker/privacy_filter.py"
+            pythonPath = "\(home)/projects/masker/.venv/bin/python"
+        }
+
+        // ── 模型位置 ──
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let userModel = appSupport.appendingPathComponent("Masker/ai-model").path
+
+        if let bundlePath = Bundle.main.resourcePath {
             let bundledModel = "\(bundlePath)/ai-model"
             if fm.fileExists(atPath: "\(bundledModel)/model.safetensors") {
                 modelDir = bundledModel
-                scriptPath = "\(bundlePath)/privacy_filter.py"
-                pythonPath = "\(bundlePath)/.venv/bin/python"
             } else {
-                // 开发模式
-                modelDir = "\(home)/projects/masker/ai-model"
-                scriptPath = "\(home)/projects/masker/privacy_filter.py"
-                pythonPath = "\(home)/projects/masker/.venv/bin/python"
+                modelDir = userModel
             }
         } else {
-            modelDir = "\(home)/projects/masker/ai-model"
-            scriptPath = "\(home)/projects/masker/privacy_filter.py"
-            pythonPath = "\(home)/projects/masker/.venv/bin/python"
+            modelDir = home + "/projects/masker/ai-model"
         }
 
         checkAvailability()
