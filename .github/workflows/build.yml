@@ -179,13 +179,38 @@ jobs:
       - name: Generate release body
         id: body
         run: |
+          MSG=$(git log -1 --pretty=format:"%s")
+          SHA=$(git rev-parse --short HEAD)
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            MSG=$(git log -1 --pretty=format:"%s")
-            printf '## Masker %%s\n\n**%%s**\n\n### 下载\n- ⚡ 轻量版 (Masker-轻量版.dmg): 仅 regex 检测\n- 🧠 完整版 (Masker.dmg): 含 AI 代码\n\n### 使用方式\n1. 下载 .dmg\n2. 双击打开，拖到 Applications\n3. 如需 AI 检测，在「使用指南」页下载模型\n' "${{ github.event.inputs.version }}" "$MSG" > /tmp/release_body.md
+            cat > /tmp/release_body.md <<- BODY
+          ## Masker ${{ github.event.inputs.version }}
+
+          **${MSG}**
+
+          ### 下载
+          - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测
+          - 🧠 **完整版** (Masker.dmg): 含 AI 代码，打开后在「使用指南」页下载模型
+
+          ### 使用方式
+          1. 下载 .dmg
+          2. 双击打开，拖到 Applications 文件夹
+          3. 如需 AI 检测，在「使用指南」页点击下载 AI 模型
+          BODY
           else
-            MSG=$(git log -1 --pretty=format:"%s")
-            DATE=$(date -u +%Y%m%d)
-            printf '## Masker 自动构建 (%%s)\n\n**%%s**\n\n### 下载\n- ⚡ 轻量版 (Masker-轻量版.dmg): 仅 regex 检测，即开即用\n\n### 完整版\n如需完整版（含 AI 代码），请手动触发 workflow 并输入版本号。\n' "$DATE" "$MSG" > /tmp/release_body.md
+            cat > /tmp/release_body.md <<- BODY
+          ## Masker Alpha Build
+
+          **${MSG}** (${SHA})
+
+          ### 下载
+          - ⚡ **轻量版** (Masker-轻量版.dmg): 仅 regex 检测，即开即用
+          - 🧠 **完整版** (Masker.dmg): 含 AI 代码，打开后在「使用指南」页下载模型
+
+          ### 使用方式
+          1. 下载 .dmg
+          2. 双击打开，拖到 Applications 文件夹
+          3. 如需 AI 检测，在「使用指南」页点击下载 AI 模型
+          BODY
           fi
           echo "body<<BODYEOF" >> "$GITHUB_OUTPUT"
           cat /tmp/release_body.md >> "$GITHUB_OUTPUT"
@@ -198,8 +223,7 @@ jobs:
           name: Masker-轻量版
           path: release
 
-      - name: Download full DMG (manual only)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download full DMG
         uses: actions/download-artifact@v4
         with:
           name: Masker-完整版
