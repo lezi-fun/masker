@@ -32,6 +32,13 @@ public class ModelDownloader: ObservableObject {
 
     public func download() async {
         guard !isDownloading else { return }
+        checkIfDownloaded()
+        guard !isDownloaded else {
+            await MainActor.run {
+                self.statusMessage = "✅ AI 模型已就绪"
+            }
+            return
+        }
 
         await MainActor.run {
             self.isDownloading = true
@@ -79,65 +86,51 @@ public class ModelDownloader: ObservableObject {
         let dest = modelDir.appendingPathComponent(name)
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("masker_\(name)")
 
-        // Resume support: check if partial download exists
-        var existingSize: Int64 = 0
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: tmp.path) {
-            existingSize = (attrs[.size] as? Int64) ?? 0
+        await MainActor.run {
+            self.statusMessage = "下载 \(name)..."
         }
 
-        var request = URLRequest(url: url)
-        if existingSize > 0 {
-            request.setValue("bytes=\(existingSize)-", forHTTPHeaderField: "Range")
+        let session = URLSession(configuration: .default)
+        let task = session.downloadTask(with: url) { [self] tempURL, response, error in
+            defer { session.invalidateAndCancel() }
+
+            if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
+                return
+            }
+
+            guard let tempURL = tempURL else { return }
+
+            do {
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tempURL, to: dest)
+            } catch {}
         }
 
-        return await withCheckedContinuation { continuation in
-            let session = URLSession(configuration: .default)
-            let task = session.downloadTask(with: request) { tempURL, response, error in
-                defer { session.invalidateAndCancel() }
-
-                if let httpResp = response as? HTTPURLResponse, httpResp.statusCode >= 400 {
-                    continuation.resume(returning: false)
-                    return
+        // Progress polling
+        Task {
+            while task.state == .running {
+                let pct = task.progress.fractionCompleted
+                await MainActor.run {
+                    let base = Double(self.files.count - 1) / Double(self.files.count)
+                    self.progress = base + pct / Double(self.files.count)
+                    self.statusMessage = "下载 \(name)... \(Int(pct * 100))%"
                 }
-
-                guard let tempURL = tempURL else {
-                    continuation.resume(returning: false)
-                    return
-                }
-
-                do {
-                    if existingSize > 0 {
-                        // Append to existing partial file
-                        let fileHandle = try FileHandle(forWritingTo: tmp)
-                        fileHandle.seekToEndOfFile()
-                        let data = try Data(contentsOf: tempURL)
-                        fileHandle.write(data)
-                        try fileHandle.close()
-                    } else {
-                        try? FileManager.default.removeItem(at: tmp)
-                        try FileManager.default.moveItem(at: tempURL, to: tmp)
-                    }
-
-                    // Move to final destination
-                    try? FileManager.default.removeItem(at: dest)
-                    try FileManager.default.moveItem(at: tmp, to: dest)
-                    continuation.resume(returning: true)
-                } catch {
-                    continuation.resume(returning: false)
-                }
+                try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
             }
+        }
 
-            // Observe progress
-            let obs = task.progress.observe(\.fractionCompleted) { p, _ in
-                DispatchQueue.main.async {
-                    let fileProgress = p.fractionCompleted / Double(self.files.count)
-                    let baseProgress = Double(self.files.count - 1) / Double(self.files.count)
-                    self.progress = baseProgress + fileProgress
-                }
-            }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             task.resume()
-            _ = obs
+            // Wait for task completion via URLSession delegate queue
+            Task {
+                while task.state == .running {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+                continuation.resume()
+            }
         }
+
+        return FileManager.default.fileExists(atPath: dest.path)
     }
 
     public var modelPath: String {

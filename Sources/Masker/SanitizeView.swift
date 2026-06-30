@@ -219,18 +219,17 @@ struct SanitizeView: View {
         let text = inputText
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        // Step 1: Run regex detection
-        let regexSegments = appState.detector.detect(in: text)
+        // Step 1: Run regex detection (default)
+        var regexSegments: [SensitiveSegment] = []
         var allSegments: [SensitiveSegment] = []
         var aiInfo: String = ""
 
-        // Step 2: Run AI detection if enabled
 #if !NO_AI
-        if useAIDetection {
+        if useAIDetection && appState.modelDownloader.isDownloaded {
+            // AI 模式：仅使用 AI 检测，跳过 regex
             appState.aiDetector.reset()
             let aiResults = await appState.aiDetector.detect(text: text)
 
-            // Convert AI segments to SensitiveSegment format, skip low confidence
             let threshold = 0.7
             for ai in aiResults where ai.confidence >= threshold && !ai.original.isEmpty {
                 let nsRange = NSRange(location: ai.start, length: ai.end - ai.start)
@@ -241,12 +240,16 @@ struct SanitizeView: View {
                 ))
             }
 
-            aiInfo = " + AI \(aiResults.filter { $0.confidence >= threshold }.count) 项"
+            aiInfo = " 🤖 AI 模式 (\(aiResults.filter { $0.confidence >= threshold }.count) 项)"
+        } else {
+            // 默认 regex 模式
+            regexSegments = appState.detector.detect(in: text)
+            allSegments = regexSegments
         }
+#else
+        regexSegments = appState.detector.detect(in: text)
+        allSegments = regexSegments
 #endif
-
-        // Merge: regex segments first (they're more precise for what they cover)
-        allSegments = regexSegments + allSegments
 
         // Remove overlapping (prefer longer/regex first)
         let merged = mergeSegments(allSegments)
