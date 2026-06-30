@@ -63,7 +63,6 @@ jobs:
   full-build:
     name: 完整版
     runs-on: macos-latest
-    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
