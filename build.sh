@@ -54,17 +54,16 @@ build_version() {
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+  <key>CFBundleIconFile</key>
+  <string>Masker</string>
 </dict>
+</plist>
 PLIST
 
     # 2.5 嵌入图标
     ICON_SRC="masker-icon/Masker.icns"
     if [ -f "$ICON_SRC" ]; then
         cp "$ICON_SRC" "${dest}/Contents/Resources/"
-        # Ensure Info.plist references the icon
-        if ! grep -q "CFBundleIconFile" "${dest}/Contents/Info.plist" 2>/dev/null; then
-            sed -i '' 's|</dict>|  <key>CFBundleIconFile</key>\n  <string>Masker</string>\n</dict>|' "${dest}/Contents/Info.plist"
-        fi
     fi
 
     # 3. 完整版：打包 AI 模型 + Python 环境 + 脚本
