@@ -100,6 +100,9 @@ snapshot_download('openai/privacy-filter', local_dir='ai-model', local_dir_use_s
         cp extract_text.py "${dest}/Contents/Resources/"
     fi
 
+    # 最后：Ad-hoc 代码签名（防止 macOS 报"已损坏"）
+    codesign --force --deep --sign - "${dest}" 2>/dev/null || true
+
     echo "✅ ${dest} 构建完成"
     du -sh "${dest}"
 }
